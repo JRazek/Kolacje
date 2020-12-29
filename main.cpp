@@ -40,25 +40,29 @@ struct Query{
 
     struct Comparator{
         const int blockSize;
-        Comparator(int blockSize, Query * q1, Query * q2): blockSize(blockSize){}
-        bool operator () (const Query * q1, Query * q2) const{
+        Comparator(int blockSize): blockSize(blockSize){}
+        bool operator () (Query * q1, Query * q2) const{
             int lowIndexQ1, highIndexQ1;
             lowIndexQ1 = (q1->n1->lowOccurrence > q1->n2->lowOccurrence ? q1->n1->lowOccurrence : q1->n2->lowOccurrence);
             highIndexQ1 = (q1->n1->highOccurrence < q1->n2->highOccurrence ? q1->n1->highOccurrence : q1->n2->highOccurrence);
+            q1->low = lowIndexQ1;
+            q1->high = highIndexQ1;
 
             int lowIndexQ2, highIndexQ2;
             lowIndexQ2 = (q2->n1->lowOccurrence > q2->n2->lowOccurrence ? q2->n1->lowOccurrence : q2->n2->lowOccurrence);
             highIndexQ2 = (q2->n1->highOccurrence < q2->n2->highOccurrence ? q2->n1->highOccurrence : q2->n2->highOccurrence);
+            q2->low = lowIndexQ2;
+            q2->high = highIndexQ2;
 
             int blockQ1Left = lowIndexQ1 / blockSize;
             int blockQ2Left = lowIndexQ2 / blockSize;
             if(blockQ1Left != blockQ2Left){
-                return blockQ1Left > blockQ2Left;
+                return blockQ1Left < blockQ2Left;
             }
             int blockQ1Right = highIndexQ1 / blockSize;
             int blockQ2Right = highIndexQ2 / blockSize;
 
-            return blockQ1Right > blockQ2Right;
+            return blockQ1Right < blockQ2Right;
 
         }
     };
@@ -120,7 +124,10 @@ int main() {
     dfs(nodes[0], -1, dfsOrder);
     int blockSize = ceil(sqrt(dfsOrder.size()));
 
-    sortQueries(blockSize, queries);
+
+    sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
+
+    cout<<"";
 
 
 
