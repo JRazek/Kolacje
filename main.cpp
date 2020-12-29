@@ -128,7 +128,32 @@ int main() {
     sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
 
     cout<<"";
+    int typeOccurrence[typesCount];
+    for(auto &i : typeOccurrence){
+        i = 0;
+    }
 
+    typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
+
+    int low = 0, high = 0;
+
+
+
+    for(auto query : queries){
+        while(low != query->low){
+            if(low < query->low){
+
+                Node * n = nodes[dfsOrder[low]];
+                typeOccurrence[n->restaurantType] --;
+                low ++;
+
+            }
+            else{
+                typeOccurrence[nodes[dfsOrder[low]]->restaurantType] --;
+                low --;
+            }
+        }
+    }
 
 
 
