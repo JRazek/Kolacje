@@ -45,7 +45,20 @@ struct Query{
             int lowIndexQ1, highIndexQ1;
             lowIndexQ1 = (q1->n1->lowOccurrence > q1->n2->lowOccurrence ? q1->n1->lowOccurrence : q1->n2->lowOccurrence);
             highIndexQ1 = (q1->n1->highOccurrence < q1->n2->highOccurrence ? q1->n1->highOccurrence : q1->n2->highOccurrence);
-            
+
+            int lowIndexQ2, highIndexQ2;
+            lowIndexQ2 = (q2->n1->lowOccurrence > q2->n2->lowOccurrence ? q2->n1->lowOccurrence : q2->n2->lowOccurrence);
+            highIndexQ2 = (q2->n1->highOccurrence < q2->n2->highOccurrence ? q2->n1->highOccurrence : q2->n2->highOccurrence);
+
+            int blockQ1Left = lowIndexQ1 / blockSize;
+            int blockQ2Left = lowIndexQ2 / blockSize;
+            if(blockQ1Left != blockQ2Left){
+                return blockQ1Left > blockQ2Left;
+            }
+            int blockQ1Right = highIndexQ1 / blockSize;
+            int blockQ2Right = highIndexQ2 / blockSize;
+
+            return blockQ1Right > blockQ2Right;
 
         }
     };
