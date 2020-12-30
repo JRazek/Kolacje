@@ -16,12 +16,17 @@ struct Edge{
 struct Node{
     const int id;
 
-    Node * parentPath;
+   // Node * parentPath;
     vector<Edge *> connections;
     const int restaurantType;
 
     int lowOccurrence;
     int highOccurrence;
+
+    int level;
+
+    int firstEuler;
+    int lastEuler;
 
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
@@ -34,7 +39,9 @@ struct Query{
 
     int low, high; //Mo's range
 
-    Query(int id, Node * n1, Node * n2): id(id), n1(n1), n2(n2){};
+    const int restaurantWanted;
+
+    Query(int id, Node * n1, Node * n2, int rWanted): id(id), n1(n1), n2(n2), restaurantWanted(rWanted){};
 
     int answer;
 
@@ -69,22 +76,71 @@ struct Query{
 
 };
 
-void sortQueries(int blockSize, vector<Query *> &queries){
+struct SparseTable{
+    vector<vector<Node *>> tab;
 
-}
+    SparseTable(const vector<Node *> &data){
+        int height = log2(data.size());
 
-void dfs(Node * n, int comingFrom, vector<int> &occurrences){
+        tab.emplace_back();
+        for(int i = 0; i < data.size(); i ++){
+            tab[0].push_back(data[i]);
+        }
+        for(int i = 1; i < height; i++){
+            tab.emplace_back();
+            int delayed = pow(2, i) - 1;
+            for(int j = 0; j < data.size() - pow(2, i); j ++){
+                //fix the sparse table
+            }
+        }
+        cout<<"";
+    }
+
+    Node * minRangeQuery(int min, int max){
+        int y = log2(max - min + 1);
+        int x1 = min, x2 = x1 + pow(2, y) - 1;
+
+        Node * n1 = tab[y][x1];
+        Node * n2 = tab[y][x2];
+
+        return (n1->level < n2->level ? n1 : n2);
+
+    }
+};
+
+void dfs(Node * n, int comingFrom, vector<int> &occurrences, vector<Node *> &eulerTour, int level = 0){
     occurrences.push_back(n->id);
+    eulerTour.push_back(n);
+
     n->lowOccurrence = occurrences.size() - 1;
+    n->firstEuler = eulerTour.size() - 1;
+
+    n->level = level;
     for(auto e : n->connections){
         if(e->id != comingFrom){
             Node * another = (e->n1 == n ? e->n2 : e->n1);
-            dfs(another, e->id, occurrences);
+            dfs(another, e->id, occurrences, eulerTour, ++level);
+            eulerTour.push_back(n);
+            n->lastEuler = eulerTour.size();
         }
+    }
+    if(eulerTour.back() != n){
+        eulerTour.push_back(n);
+        n->lastEuler = eulerTour.size();
     }
     occurrences.push_back(n->id);
     n->highOccurrence = occurrences.size() - 1;
 }
+
+void validateState(const bool state, const int low, const int high, int &currentPrice, const Node * n, const int ticketPrice){
+    if(state){
+        //added n to the mos, check if its the second occurrence which would delete it from the price
+        if(low >= n->lowOccurrence && high <= n->highOccurrence){
+
+        }
+    }
+}
+
 
 int main() {
     int nodesCount, typesCount;
@@ -113,19 +169,26 @@ int main() {
 
     vector<Query *> queries;
     for(int i = 0; i < queriesCount; i ++){
-        int n1, n2;
-        cin >> n1 >> n2;
+        int n1, n2, restaurant;
+        cin >> n1 >> n2 >> restaurant;
         n1 --, n2 --;
 
-        queries.push_back(new Query(i, nodes[n1], nodes[n2]));
+        queries.push_back(new Query(i, nodes[n1], nodes[n2], restaurant));
     }
 
     vector<int> dfsOrder; // each int corresponds to nodeID. first occurrence is preorder, second is postorder
-    dfs(nodes[0], -1, dfsOrder);
+    vector<Node *> eulerTour;
+
+    dfs(nodes[0], -1, dfsOrder, eulerTour);
     int blockSize = ceil(sqrt(dfsOrder.size()));
 
 
     sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
+
+    SparseTable sp = SparseTable(eulerTour);
+
+
+  //  Node * parent = sp.minRangeQuery(nodes[0]->firstEuler, nodes[3]->lastEuler);
 
     cout<<"";
     int typeOccurrence[typesCount];
@@ -138,21 +201,31 @@ int main() {
     int low = 0, high = 0;
 
 
-
+    int currentPrice = 0;
     for(auto query : queries){
         while(low != query->low){
             if(low < query->low){
 
                 Node * n = nodes[dfsOrder[low]];
-                typeOccurrence[n->restaurantType] --;
+               // typeOccurrence[n->restaurantType] --;
                 low ++;
 
             }
             else{
-                typeOccurrence[nodes[dfsOrder[low]]->restaurantType] --;
+             //   typeOccurrence[nodes[dfsOrder[low]]->restaurantType] --;
                 low --;
             }
         }
+
+        while(high != query->high){
+            if(high < query->high){
+                high ++;
+            }
+            else{
+                high --;
+            }
+        }
+        cout<<"";
     }
 
 
