@@ -194,45 +194,50 @@ int main() {
     sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
 
 
-
-  //  Node * parent = sp.minRangeQuery(nodes[0]->firstEuler, nodes[3]->lastEuler);
-
     cout<<"";
-    int typeOccurrence[typesCount];
-    for(auto &i : typeOccurrence){
-        i = 0;
-    }
 
-    typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
+    int typeOccurrence[typesCount];
+    bool doubleOccurrence[typesCount];
+
+    for(int i = 0; i < typesCount; i ++){
+        typeOccurrence[i] = 0;
+        doubleOccurrence[i] = false;
+    }
 
     int low = 0, high = 0;
 
-
     int currentPrice = 0;
     for(auto query : queries){
-        while(low != query->low){
-            if(low < query->low){
-
-                Node * n = nodes[dfsOrder[low]];
-               // typeOccurrence[n->restaurantType] --;
-                low ++;
-
-            }
-            else{
-             //   typeOccurrence[nodes[dfsOrder[low]]->restaurantType] --;
-                low --;
-            }
+        Node * n;
+        bool deleted;
+        while(low < query->low){
+            n = nodes[dfsOrder[low]];
+            low ++;
+            deleted = true;
         }
-
-        while(high != query->high){
-            if(high < query->high){
-                high ++;
-            }
-            else{
-                high --;
-            }
+        while(low > query->low){
+            low --;
+            n = nodes[dfsOrder[low]];
+            deleted = false;
         }
-        cout<<"";
+        while(high > query->high){
+            n = nodes[dfsOrder[high]];
+            high --;
+            deleted = true;
+        }
+        while(high < query->high){
+            high ++;
+            n = nodes[dfsOrder[high]];
+            deleted = false;
+        }
+        if(n != nullptr){
+            if(deleted){
+                //check for double occurrence
+            }else{
+                //check for removal of double occurrence
+            }
+            //check its state
+        }
     }
 
 
