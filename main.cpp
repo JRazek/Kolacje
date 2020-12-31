@@ -81,30 +81,25 @@ struct SparseTable{
 
     SparseTable(const vector<Node *> &data){
         int height = log2(data.size());
-
-        tab.emplace_back();
+        tab.push_back(vector<Node *> ());
         for(int i = 0; i < data.size(); i ++){
             tab[0].push_back(data[i]);
         }
-        for(int i = 1; i < height; i++){
+        for(int i = 1; i < height; i ++){
             tab.emplace_back();
-            int delayed = pow(2, i) - 1;
-            for(int j = 0; j < data.size() - pow(2, i); j ++){
-                //fix the sparse table
+            for(int j = 0; j < data.size() - pow(2, i) + 1; j ++){
+                Node * n1 = minRangeQuery(j, j + pow(2, i - 1) - 1);
+                Node * n2 = minRangeQuery(j + pow(2, i - 1), j + pow(2, i) - 1);
+                tab[i].push_back((n1->level < n2->level ? n1 : n2));
             }
         }
-        cout<<"";
+
     }
 
     Node * minRangeQuery(int min, int max){
         int y = log2(max - min + 1);
-        int x1 = min, x2 = x1 + pow(2, y) - 1;
-
-        Node * n1 = tab[y][x1];
-        Node * n2 = tab[y][x2];
-
-        return (n1->level < n2->level ? n1 : n2);
-
+        int x1 = min, x2 = max - pow(2, y) + 1;
+        return (tab[y][x1] < tab[y][x2] ? tab[y][x1] : tab[y][x2]);
     }
 };
 
