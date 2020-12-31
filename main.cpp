@@ -97,6 +97,11 @@ struct SparseTable{
     }
 
     Node * minRangeQuery(int min, int max){
+        if(min > max){
+            int tmp = max;
+            max = min;
+            min = tmp;
+        }
         int y = log2(max - min + 1);
         int x1 = min, x2 = max - pow(2, y) + 1;
         return (tab[y][x1] < tab[y][x2] ? tab[y][x1] : tab[y][x2]);
@@ -116,12 +121,12 @@ void dfs(Node * n, int comingFrom, vector<int> &occurrences, vector<Node *> &eul
             Node * another = (e->n1 == n ? e->n2 : e->n1);
             dfs(another, e->id, occurrences, eulerTour, ++level);
             eulerTour.push_back(n);
-            n->lastEuler = eulerTour.size();
+            n->lastEuler = eulerTour.size() - 1;
         }
     }
     if(eulerTour.back() != n){
         eulerTour.push_back(n);
-        n->lastEuler = eulerTour.size();
+        n->lastEuler = eulerTour.size() - 1;
     }
     occurrences.push_back(n->id);
     n->highOccurrence = occurrences.size() - 1;
@@ -159,6 +164,14 @@ int main() {
         n2->connections.push_back(e);
     }
 
+
+    vector<int> dfsOrder; // each int corresponds to nodeID. first occurrence is preorder, second is postorder
+    vector<Node *> eulerTour;
+
+    dfs(nodes[0], -1, dfsOrder, eulerTour);
+    int blockSize = ceil(sqrt(dfsOrder.size()));
+    SparseTable sp = SparseTable(eulerTour);
+
     int queriesCount;
     cin >> queriesCount;
 
@@ -168,19 +181,18 @@ int main() {
         cin >> n1 >> n2 >> restaurant;
         n1 --, n2 --;
 
-        queries.push_back(new Query(i, nodes[n1], nodes[n2], restaurant));
+        Node * lca = sp.minRangeQuery(nodes[n1]->lastEuler, nodes[n2]->firstEuler);
+
+        queries.push_back(new Query(i, nodes[n1], lca, restaurant));
+        queries.push_back(new Query(i, lca, nodes[n2], restaurant));
+        //to same id queries - answer is the answer of both combined together
+        //for example - answer for query of id 5 would be the first query of id 5 + second of id 5
     }
 
-    vector<int> dfsOrder; // each int corresponds to nodeID. first occurrence is preorder, second is postorder
-    vector<Node *> eulerTour;
-
-    dfs(nodes[0], -1, dfsOrder, eulerTour);
-    int blockSize = ceil(sqrt(dfsOrder.size()));
 
 
     sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
 
-    SparseTable sp = SparseTable(eulerTour);
 
 
   //  Node * parent = sp.minRangeQuery(nodes[0]->firstEuler, nodes[3]->lastEuler);
