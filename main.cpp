@@ -16,7 +16,7 @@ struct Edge{
 struct Node{
     const int id;
 
-   // Node * parentPath;
+    int parentPathCost;
     vector<Edge *> connections;
     const int restaurantType;
 
@@ -39,27 +39,27 @@ struct Query{
 
     int low, high; //Mo's range
 
-    const int restaurantWanted;
+    int restaurantWanted;
 
-    Query(int id, Node * n1, Node * n2, int rWanted): id(id), n1(n1), n2(n2), restaurantWanted(rWanted){};
+    Query(int id, Node * n1, Node * n2, int rWanted): id(id), n1(n1), n2(n2), restaurantWanted(rWanted){
+        low = n1->lowOccurrence;
+        high = n2->lowOccurrence;
+        if(low < high){
+            int tmp = high;
+            high = low;
+            low = tmp;
+        }
+    };
 
     int answer;
 
     struct Comparator{
         const int blockSize;
         Comparator(int blockSize): blockSize(blockSize){}
-        bool operator () (Query * q1, Query * q2) const{
-            int lowIndexQ1, highIndexQ1;
-            lowIndexQ1 = (q1->n1->lowOccurrence > q1->n2->lowOccurrence ? q1->n1->lowOccurrence : q1->n2->lowOccurrence);
-            highIndexQ1 = (q1->n1->highOccurrence < q1->n2->highOccurrence ? q1->n1->highOccurrence : q1->n2->highOccurrence);
-            q1->low = lowIndexQ1;
-            q1->high = highIndexQ1;
+        bool operator () (const Query * q1, const Query * q2) const{
+            int lowIndexQ1 = q1->low, highIndexQ1 = q1->high;
 
-            int lowIndexQ2, highIndexQ2;
-            lowIndexQ2 = (q2->n1->lowOccurrence > q2->n2->lowOccurrence ? q2->n1->lowOccurrence : q2->n2->lowOccurrence);
-            highIndexQ2 = (q2->n1->highOccurrence < q2->n2->highOccurrence ? q2->n1->highOccurrence : q2->n2->highOccurrence);
-            q2->low = lowIndexQ2;
-            q2->high = highIndexQ2;
+            int lowIndexQ2 = q2->low, highIndexQ2 = q2->low;
 
             int blockQ1Left = lowIndexQ1 / blockSize;
             int blockQ2Left = lowIndexQ2 / blockSize;
@@ -108,7 +108,12 @@ struct SparseTable{
     }
 };
 
-void dfs(Node * n, int comingFrom, vector<int> &occurrences, vector<Node *> &eulerTour, int level = 0){
+void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &eulerTour, int level = 0){
+    if(comingFrom != nullptr){
+        n->parentPathCost = comingFrom->cost;
+    }else{
+        n->parentPathCost = 0;
+    }
     occurrences.push_back(n->id);
     eulerTour.push_back(n);
 
@@ -117,9 +122,9 @@ void dfs(Node * n, int comingFrom, vector<int> &occurrences, vector<Node *> &eul
 
     n->level = level;
     for(auto e : n->connections){
-        if(e->id != comingFrom){
+        if(e != comingFrom){
             Node * another = (e->n1 == n ? e->n2 : e->n1);
-            dfs(another, e->id, occurrences, eulerTour, ++level);
+            dfs(another, e, occurrences, eulerTour, ++level);
             eulerTour.push_back(n);
             n->lastEuler = eulerTour.size() - 1;
         }
@@ -168,7 +173,7 @@ int main() {
     vector<int> dfsOrder; // each int corresponds to nodeID. first occurrence is preorder, second is postorder
     vector<Node *> eulerTour;
 
-    dfs(nodes[0], -1, dfsOrder, eulerTour);
+    dfs(nodes[0], nullptr, dfsOrder, eulerTour);
     int blockSize = ceil(sqrt(dfsOrder.size()));
     SparseTable sp = SparseTable(eulerTour);
 
@@ -212,8 +217,8 @@ int main() {
         bool deleted;
         while(low < query->low){
             n = nodes[dfsOrder[low]];
+
             low ++;
-            deleted = true;
         }
         while(low > query->low){
             low --;
@@ -230,12 +235,8 @@ int main() {
             n = nodes[dfsOrder[high]];
             deleted = false;
         }
-        if(n != nullptr){
-            if(deleted){
-                //check for double occurrence
-            }else{
-                //check for removal of double occurrence
-            }
+        if(n != nullptr && low >= high){
+
             //check its state
         }
     }
