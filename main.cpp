@@ -41,10 +41,12 @@ struct Query{
 
     int restaurantWanted;
 
+    bool restaurantFound = false;
+
     Query(int id, Node * n1, Node * n2, int rWanted): id(id), n1(n1), n2(n2), restaurantWanted(rWanted){
         low = n1->lowOccurrence;
         high = n2->lowOccurrence;
-        if(low < high){
+        if(low > high){
             int tmp = high;
             high = low;
             low = tmp;
@@ -124,7 +126,7 @@ void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &
     for(auto e : n->connections){
         if(e != comingFrom){
             Node * another = (e->n1 == n ? e->n2 : e->n1);
-            dfs(another, e, occurrences, eulerTour, ++level);
+            dfs(another, e, occurrences, eulerTour, level + 1);
             eulerTour.push_back(n);
             n->lastEuler = eulerTour.size() - 1;
         }
@@ -136,16 +138,6 @@ void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &
     occurrences.push_back(n->id);
     n->highOccurrence = occurrences.size() - 1;
 }
-
-void validateState(const bool state, const int low, const int high, int &currentPrice, const Node * n, const int ticketPrice){
-    if(state){
-        //added n to the mos, check if its the second occurrence which would delete it from the price
-        if(low >= n->lowOccurrence && high <= n->highOccurrence){
-
-        }
-    }
-}
-
 
 int main() {
     int nodesCount, typesCount;
@@ -184,12 +176,16 @@ int main() {
     for(int i = 0; i < queriesCount; i ++){
         int n1, n2, restaurant;
         cin >> n1 >> n2 >> restaurant;
-        n1 --, n2 --;
+        n1 --, n2 --, restaurant --;
 
         Node * lca = sp.minRangeQuery(nodes[n1]->lastEuler, nodes[n2]->firstEuler);
-
-        queries.push_back(new Query(i, nodes[n1], lca, restaurant));
-        queries.push_back(new Query(i, lca, nodes[n2], restaurant));
+        if(lca == nodes[n1] || lca == nodes[n2]){
+            queries.push_back(new Query(i, nodes[n1], nodes[n2], restaurant));
+        }else{
+            queries.push_back(new Query(i, nodes[n1], lca, restaurant));
+            queries.push_back(new Query(i, lca, nodes[n2], restaurant));
+        }
+        cout<<"";
         //to same id queries - answer is the answer of both combined together
         //for example - answer for query of id 5 would be the first query of id 5 + second of id 5
     }
@@ -202,43 +198,76 @@ int main() {
     cout<<"";
 
     int typeOccurrence[typesCount];
-    bool doubleOccurrence[typesCount];
 
     for(int i = 0; i < typesCount; i ++){
         typeOccurrence[i] = 0;
-        doubleOccurrence[i] = false;
     }
 
     int low = 0, high = 0;
 
     int currentPrice = 0;
+    typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
     for(auto query : queries){
-        Node * n;
-        bool deleted;
         while(low < query->low){
-            n = nodes[dfsOrder[low]];
-
+            Node * n = nodes[dfsOrder[low]];
+            if(n->lowOccurrence == low && n->highOccurrence <= high){
+                currentPrice += n->parentPathCost;
+                typeOccurrence[n->restaurantType] ++;
+                //removal of double occurrence
+            }else{
+                currentPrice -= n->parentPathCost;
+                typeOccurrence[n->restaurantType] --;
+            }
             low ++;
         }
         while(low > query->low){
             low --;
-            n = nodes[dfsOrder[low]];
-            deleted = false;
+            Node * n = nodes[dfsOrder[low]];
+            if(n->lowOccurrence == low && n->highOccurrence <= high){
+                currentPrice -= n->parentPathCost;
+                typeOccurrence[n->restaurantType] --;
+            }else{
+                currentPrice += n->parentPathCost;
+                typeOccurrence[n->restaurantType] ++;
+            }
         }
         while(high > query->high){
-            n = nodes[dfsOrder[high]];
+            Node * n = nodes[dfsOrder[high]];
+            if(n->highOccurrence == high && n->lowOccurrence >= low){
+                currentPrice += n->parentPathCost;
+                typeOccurrence[n->restaurantType] ++;
+            }else{
+                currentPrice -= n->parentPathCost;
+                typeOccurrence[n->restaurantType] --;
+            }
             high --;
-            deleted = true;
         }
         while(high < query->high){
             high ++;
-            n = nodes[dfsOrder[high]];
-            deleted = false;
+            Node * n = nodes[dfsOrder[high]];
+            if(n->highOccurrence == high && n->lowOccurrence >= low){
+                currentPrice -= n->parentPathCost;
+                typeOccurrence[n->restaurantType] --;
+            }else{
+                currentPrice += n->parentPathCost;
+                typeOccurrence[n->restaurantType] ++;
+            }
         }
-        if(n != nullptr && low >= high){
-
-            //check its state
+        query->answer = currentPrice;
+        if(typeOccurrence[query->restaurantWanted] > 0){
+            query->restaurantFound = true;
         }
+    }
+    pair<bool, int> answers[queriesCount];
+    for(auto &i : answers){
+        i = make_pair(false, 0);
+    }
+    for(auto query : queries){
+        answers[query->id].second += query->answer;
+        answers[query->id].first += query->restaurantFound;
+    }
+    for(auto &i : answers){
+        cout << (i.first ? i.second : -1) << "\n";
     }
 
 
