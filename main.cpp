@@ -158,7 +158,7 @@ int main() {
         Node * n2 = nodes[n2ID];
         Edge * e = new Edge(i, cost, n1, n2);
         n1->connections.push_back(e);
-        n2->connections.push_back(e);
+        n2->connections.push_back(e);//
     }
 
 
