@@ -3,6 +3,13 @@
 using namespace std;
 struct Node;
 
+struct HeavyPath{
+    vector<int> prefixSum; //top to bottom
+    int id;
+    Node * parentNode;
+    HeavyPath(Node * parentNode, int id): parentNode(parentNode), id(id){}
+};
+
 struct Edge{
     const int id;
     const int cost;
@@ -20,64 +27,15 @@ struct Node{
     vector<Edge *> connections;
     const int restaurantType;
 
-    int lowOccurrence;
-    int highOccurrence;
-
     int level;
+    
+    HeavyPath * heavtPath;//if null - no belonging to any heavy path
 
     int firstEuler;
     int lastEuler;
 
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
-};
-
-struct Query{
-    const int id;
-    const Node * n1;
-    const Node * n2;
-
-    int toRemove;
-
-    int low, high; //Mo's range
-
-    int restaurantWanted;
-
-    bool restaurantFound = false;
-
-    Query(int id, Node * n1, Node * n2, int rWanted, int toRemove = 0): id(id), n1(n1), n2(n2), restaurantWanted(rWanted), toRemove(toRemove){
-        low = n1->lowOccurrence;
-        high = n2->lowOccurrence;
-        if(low > high){
-            int tmp = high;
-            high = low;
-            low = tmp;
-        }
-    };
-
-    int answer;
-
-    struct Comparator{
-        const int blockSize;
-        Comparator(int blockSize): blockSize(blockSize){}
-        bool operator () (const Query * q1, const Query * q2) const{
-            int lowIndexQ1 = q1->low, highIndexQ1 = q1->high;
-
-            int lowIndexQ2 = q2->low, highIndexQ2 = q2->low;
-
-            int blockQ1Left = lowIndexQ1 / blockSize;
-            int blockQ2Left = lowIndexQ2 / blockSize;
-            if(blockQ1Left != blockQ2Left){
-                return blockQ1Left < blockQ2Left;
-            }
-            int blockQ1Right = highIndexQ1 / blockSize;
-            int blockQ2Right = highIndexQ2 / blockSize;
-
-            return blockQ1Right < blockQ2Right;
-
-        }
-    };
-
 };
 
 struct SparseTable{
@@ -113,15 +71,13 @@ struct SparseTable{
     }
 };
 
-void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &eulerTour, int level = 0){
+void dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     if(comingFrom != nullptr){
         n->parentPathCost = comingFrom->cost;
     }else{
         n->parentPathCost = 0;
     }
     n->level = level;
-    n->lowOccurrence = occurrences.size();
-    occurrences.push_back(n->id);
 
     n->firstEuler = eulerTour.size();
     n->lastEuler = eulerTour.size();
@@ -130,13 +86,11 @@ void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &
     for(auto e : n->connections){
         if(comingFrom != e){
             Node * another = (e->n1 != n ? e->n1 : e->n2);
-            dfs(another, e, occurrences, eulerTour, level+1);
+            dfs(another, e, eulerTour, level+1);
             n->lastEuler = eulerTour.size();
             eulerTour.push_back(n);
         }
     }
-    n->highOccurrence = occurrences.size();
-    occurrences.push_back(n->id);
     if(eulerTour.back() != n){
         n->lastEuler = eulerTour.size();
         eulerTour.push_back(n);
@@ -164,19 +118,16 @@ int main() {
         n1->connections.push_back(e);
         n2->connections.push_back(e);//
     }
-
-
-    vector<int> dfsOrder; // each int corresponds to nodeID. first occurrence is preorder, second is postorder
     vector<Node *> eulerTour;
 
-    dfs(nodes[0], nullptr, dfsOrder, eulerTour);
-    int blockSize = ceil(sqrt(dfsOrder.size()));
+    dfs(nodes[0], nullptr, eulerTour);
     SparseTable sp = SparseTable(eulerTour);
+
+    //create segment trees on the tree
 
     int queriesCount;
     cin >> queriesCount;
 
-    vector<Query *> queries;
     for(int i = 0; i < queriesCount; i ++){
         int n1ID, n2ID, restaurant;
         cin >> n1ID >> n2ID >> restaurant;
@@ -184,113 +135,8 @@ int main() {
 
         Node * n1 = nodes[n1ID];
         Node * n2 = nodes[n2ID];
-        if(i == 21){
-            cout<<"";
-        }
-
         Node * lca = sp.minRangeQuery(n1->lastEuler, n2->firstEuler);
-        if(lca == n1 || lca == n2){
-            //check which one is the parent
-            if(!(n1->lowOccurrence < n2->lowOccurrence && n1->highOccurrence > n2->highOccurrence)){
-                //n2 is the parent
-                Node * tmp = n1;
-                n1 = n2;
-                n2 = tmp;
-            }
-            queries.push_back(new Query(i, n1, n2, restaurant, n1->parentPathCost));
-        }else{
-            queries.push_back(new Query(i, lca, n1, restaurant, lca->parentPathCost));
-            queries.push_back(new Query(i, lca, n2, restaurant, lca->parentPathCost));
-        }
-        cout<<"";
-        //to same id queries - answer is the answer of both combined together
-        //for example - answer for query of id 5 would be the first query of id 5 + second of id 5
     }
-
-
-
-    sort(queries.begin(), queries.end(), Query::Comparator(blockSize));
-
-
-    cout<<"";
-
-    int typeOccurrence[typesCount];
-
-    for(int i = 0; i < typesCount; i ++){
-        typeOccurrence[i] = 0;
-    }
-
-    int low = 0, high = 0;
-
-    int currentPrice = 0;
-    typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
-    for(auto query : queries){
-        if(query->id == 21){
-            cout<<"";
-        }
-        while(low < query->low){
-            Node * n = nodes[dfsOrder[low]];
-            if(n->lowOccurrence == low && n->highOccurrence <= high){
-                currentPrice += n->parentPathCost;
-                typeOccurrence[n->restaurantType] ++;
-                //removal of double occurrence
-            }else{
-                currentPrice -= n->parentPathCost;
-                typeOccurrence[n->restaurantType] --;
-            }
-            low ++;
-        }
-        while(low > query->low){
-            low --;
-            Node * n = nodes[dfsOrder[low]];
-            if(n->lowOccurrence == low && n->highOccurrence <= high){
-                currentPrice -= n->parentPathCost;
-                typeOccurrence[n->restaurantType] --;
-            }else{
-                currentPrice += n->parentPathCost;
-                typeOccurrence[n->restaurantType] ++;
-            }
-        }
-        while(high > query->high){
-            Node * n = nodes[dfsOrder[high]];
-            if(n->highOccurrence == high && n->lowOccurrence >= low){
-                currentPrice += n->parentPathCost;
-                typeOccurrence[n->restaurantType] ++;
-            }else{
-                currentPrice -= n->parentPathCost;
-                typeOccurrence[n->restaurantType] --;
-            }
-            high --;
-        }
-        while(high < query->high){
-            high ++;
-            Node * n = nodes[dfsOrder[high]];
-            if(n->highOccurrence == high && n->lowOccurrence >= low){
-                currentPrice -= n->parentPathCost;
-                typeOccurrence[n->restaurantType] --;
-            }else{
-                currentPrice += n->parentPathCost;
-                typeOccurrence[n->restaurantType] ++;
-            }
-        }
-        query->answer = currentPrice;
-        if(typeOccurrence[query->restaurantWanted] > 0){
-            query->restaurantFound = true;
-        }
-    }
-    pair<bool, int> answers[queriesCount];
-    for(auto &i : answers){
-        i = make_pair(false, 0);
-    }
-    for(auto query : queries){
-        answers[query->id].second += query->answer - query->toRemove;
-        answers[query->id].first += query->restaurantFound;
-    }
-    for(auto &i : answers){
-        cout << (i.first ? i.second : -1) << "\n";
-    }
-
-
 
 
     return 0;
