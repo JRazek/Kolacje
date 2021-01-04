@@ -109,7 +109,7 @@ struct SparseTable{
         }
         int y = log2(max - min + 1);
         int x1 = min, x2 = max - pow(2, y) + 1;
-        return (tab[y][x1] < tab[y][x2] ? tab[y][x1] : tab[y][x2]);
+        return (tab[y][x1]->level < tab[y][x2]->level ? tab[y][x1] : tab[y][x2]);
     }
 };
 
@@ -119,27 +119,28 @@ void dfs(Node * n, Edge * comingFrom, vector<int> &occurrences, vector<Node *> &
     }else{
         n->parentPathCost = 0;
     }
-    occurrences.push_back(n->id);
-    eulerTour.push_back(n);
-
-    n->lowOccurrence = occurrences.size() - 1;
-    n->firstEuler = eulerTour.size() - 1;
-
     n->level = level;
+    n->lowOccurrence = occurrences.size();
+    occurrences.push_back(n->id);
+
+    n->firstEuler = eulerTour.size();
+    n->lastEuler = eulerTour.size();
+
+    eulerTour.push_back(n);
     for(auto e : n->connections){
-        if(e != comingFrom){
-            Node * another = (e->n1 == n ? e->n2 : e->n1);
-            dfs(another, e, occurrences, eulerTour, level + 1);
+        if(comingFrom != e){
+            Node * another = (e->n1 != n ? e->n1 : e->n2);
+            dfs(another, e, occurrences, eulerTour, level+1);
+            n->lastEuler = eulerTour.size();
             eulerTour.push_back(n);
-            n->lastEuler = eulerTour.size() - 1;
         }
     }
-    if(eulerTour.back() != n){
-        eulerTour.push_back(n);
-        n->lastEuler = eulerTour.size() - 1;
-    }
+    n->highOccurrence = occurrences.size();
     occurrences.push_back(n->id);
-    n->highOccurrence = occurrences.size() - 1;
+    if(eulerTour.back() != n){
+        n->lastEuler = eulerTour.size();
+        eulerTour.push_back(n);
+    }
 }
 
 int main() {
@@ -187,7 +188,7 @@ int main() {
             cout<<"";
         }
 
-        Node * lca = sp.minRangeQuery(n1->firstEuler, n2->firstEuler);
+        Node * lca = sp.minRangeQuery(n1->lastEuler, n2->firstEuler);
         if(lca == n1 || lca == n2){
             //check which one is the parent
             if(!(n1->lowOccurrence < n2->lowOccurrence && n1->highOccurrence > n2->highOccurrence)){
@@ -199,7 +200,7 @@ int main() {
             queries.push_back(new Query(i, n1, n2, restaurant, n1->parentPathCost));
         }else{
             queries.push_back(new Query(i, lca, n1, restaurant, lca->parentPathCost));
-            queries.push_back(new Query(i, lca, n2, restaurant));
+            queries.push_back(new Query(i, lca, n2, restaurant, lca->parentPathCost));
         }
         cout<<"";
         //to same id queries - answer is the answer of both combined together
@@ -224,7 +225,7 @@ int main() {
     int currentPrice = 0;
     typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
     for(auto query : queries){
-        if(query->id == 10){
+        if(query->id == 21){
             cout<<"";
         }
         while(low < query->low){
