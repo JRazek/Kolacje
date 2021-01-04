@@ -37,13 +37,15 @@ struct Query{
     const Node * n1;
     const Node * n2;
 
+    int toRemove;
+
     int low, high; //Mo's range
 
     int restaurantWanted;
 
     bool restaurantFound = false;
 
-    Query(int id, Node * n1, Node * n2, int rWanted): id(id), n1(n1), n2(n2), restaurantWanted(rWanted){
+    Query(int id, Node * n1, Node * n2, int rWanted, int toRemove = 0): id(id), n1(n1), n2(n2), restaurantWanted(rWanted), toRemove(toRemove){
         low = n1->lowOccurrence;
         high = n2->lowOccurrence;
         if(low > high){
@@ -82,20 +84,21 @@ struct SparseTable{
     vector<vector<Node *>> tab;
 
     SparseTable(const vector<Node *> &data){
-        int height = log2(data.size());
-        tab.push_back(vector<Node *> ());
-        for(int i = 0; i < data.size(); i ++){
+        int height = ceil(log2(data.size()));
+        //first row
+        tab.emplace_back();
+        for(int i = 0; i < data.size(); i++){
             tab[0].push_back(data[i]);
         }
         for(int i = 1; i < height; i ++){
             tab.emplace_back();
-            for(int j = 0; j < data.size() - pow(2, i) + 1; j ++){
-                Node * n1 = minRangeQuery(j, j + pow(2, i - 1) - 1);
-                Node * n2 = minRangeQuery(j + pow(2, i - 1), j + pow(2, i) - 1);
-                tab[i].push_back((n1->level < n2->level ? n1 : n2));
+            for(int j = 0 ; j < data.size() - pow(2, i) + 1; j ++){
+                int minRange = j, maxRange = j + pow(2, i) - 1;
+                Node * min1 = minRangeQuery(j, j + pow(2, i - 1) - 1);
+                Node * min2 = minRangeQuery(j + pow(2, i - 1), maxRange);
+                tab.back().push_back((min1->level < min2->level ? min1 : min2));
             }
         }
-
     }
 
     Node * minRangeQuery(int min, int max){
@@ -174,16 +177,29 @@ int main() {
 
     vector<Query *> queries;
     for(int i = 0; i < queriesCount; i ++){
-        int n1, n2, restaurant;
-        cin >> n1 >> n2 >> restaurant;
-        n1 --, n2 --, restaurant --;
+        int n1ID, n2ID, restaurant;
+        cin >> n1ID >> n2ID >> restaurant;
+        n1ID --, n2ID --, restaurant --;
 
-        Node * lca = sp.minRangeQuery(nodes[n1]->lastEuler, nodes[n2]->firstEuler);
-        if(lca == nodes[n1] || lca == nodes[n2]){
-            queries.push_back(new Query(i, nodes[n1], nodes[n2], restaurant));
+        Node * n1 = nodes[n1ID];
+        Node * n2 = nodes[n2ID];
+        if(i == 21){
+            cout<<"";
+        }
+
+        Node * lca = sp.minRangeQuery(n1->firstEuler, n2->firstEuler);
+        if(lca == n1 || lca == n2){
+            //check which one is the parent
+            if(!(n1->lowOccurrence < n2->lowOccurrence && n1->highOccurrence > n2->highOccurrence)){
+                //n2 is the parent
+                Node * tmp = n1;
+                n1 = n2;
+                n2 = tmp;
+            }
+            queries.push_back(new Query(i, n1, n2, restaurant, n1->parentPathCost));
         }else{
-            queries.push_back(new Query(i, nodes[n1], lca, restaurant));
-            queries.push_back(new Query(i, lca, nodes[n2], restaurant));
+            queries.push_back(new Query(i, lca, n1, restaurant, lca->parentPathCost));
+            queries.push_back(new Query(i, lca, n2, restaurant));
         }
         cout<<"";
         //to same id queries - answer is the answer of both combined together
@@ -208,6 +224,9 @@ int main() {
     int currentPrice = 0;
     typeOccurrence[nodes[dfsOrder[0]]->restaurantType] = 1;
     for(auto query : queries){
+        if(query->id == 10){
+            cout<<"";
+        }
         while(low < query->low){
             Node * n = nodes[dfsOrder[low]];
             if(n->lowOccurrence == low && n->highOccurrence <= high){
@@ -263,7 +282,7 @@ int main() {
         i = make_pair(false, 0);
     }
     for(auto query : queries){
-        answers[query->id].second += query->answer;
+        answers[query->id].second += query->answer - query->toRemove;
         answers[query->id].first += query->restaurantFound;
     }
     for(auto &i : answers){
