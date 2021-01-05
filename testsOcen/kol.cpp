@@ -24,13 +24,15 @@ struct Node{
 
     int level;
     
+    HeavyPath * heavyPath = nullptr; //if null - no belonging to any heavy path
+    int idInHeavyPath;  //if heavy is not null - the id in the vector of the heavy path
+    
     int subTreeSize;
 
 
     int firstEuler;
     int lastEuler;
 
-    
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
 };
@@ -97,6 +99,30 @@ struct SegmentTree{
     }
 };
 
+struct HeavyPath{
+    vector<int> prefixSum1; //top to bottom, path cost
+    
+    vector<Node *> elements; //top to bottom, first Node's path is 0 in the prefix sum as theres no occurence of it during walk
+    int id;
+    Node * parentNode;
+
+    SegmentTree * restaurantOccurrences;
+
+    HeavyPath(Node * parentNode, int id): parentNode(parentNode), id(id){
+        elements.push_back(parentNode);
+    }
+    void preprocess(){
+        vector<int> occurrences;
+
+        prefixSum1.push_back(0);//first Node
+
+        occurrences.push_back(elements[0]->restaurantType);
+        for(int i = 1; i < elements.size(); i ++){
+            prefixSum1.push_back(prefixSum1.back() + elements[i]->parentPath->cost);
+            occurrences.push_back(elements[i]->restaurantType);
+        }
+    }
+};
 
 struct SparseTable{
     vector<vector<Node *>> tab;
@@ -160,50 +186,47 @@ int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     return subTreeSize;
 }
 
-void findCentroids(Node * n, vector<Node *> &centroidNodes, vector<Edge *> &centroidEdges, Node * currParentCentroid, int treeSize, int costFromPrevCentroid){
-    int sum;
-    for(auto e : n->connections){
-        if(e != n -> parentPath){
-            Node * another = (e->n1 != n ? e->n1 : e-> n2);
-            sum += another->subTreeSize;
-        }
-    }
-    if(sum >= (treeSize / 2)){
-        if(currParentCentroid != nullptr){
-            Edge * edge = new Edge (centroidEdges.size(), costFromPrevCentroid, currParentCentroid, n);
-            
-            centroidNodes[currParentCentroid->id]->connections.push_back(edge);
-            centroidNodes[n->id]->connections.push_back(edge);
-            centroidEdges.push_back(edge);
-        }
-        //calculateSubTreeSizes(n);
-    }
-    for(auto e : n->connections){
-        if(e != n -> parentPath){
-            Node * another = (e->n1 != n ? e->n1 : e-> n2);
-            findCentroids(another, centroidNodes, centroidEdges, n, another->subTreeSize)
+void propagateHeavyPaths(Node * node, vector<HeavyPath *> &heavyPaths){
+    for(auto e : node->connections){
+        Node * another = (e->n1 != node ? e->n1 : e->n2); 
+        if(another->subTreeSize > (node->subTreeSize / 2)){
+            //the edge create heavypath
+            if(node->heavyPath != nullptr){
+                another->idInHeavyPath = node->heavyPath->elements.size();
+                node->heavyPath->elements.push_back(another);
+            }else{
+                //create new heavyPath
+                HeavyPath * p = new HeavyPath(another, heavyPaths.size());
+                another->heavyPath = p;
+                heavyPaths.push_back(p);
+            }
         }
     }
 }
 
-int calculateSubTreeSizes(Node * n){
-    int sum = 0;
-    for(auto e : n->connections){
-        if(e != n->parentPath){
-            sum += calculateSubTreeSizes((e->n1 != n ? e->n1 : e->n2));
-        }
-    }
-    sum += 1;
-    n->subTreeSize = sum;
-    return sum;
-}
 pair<bool, long> getPathData(Node * n, Node * target, int lookingFor){
     long cost = 0;
     bool foundResturant = false;
     while(n != target){
-        cost += n->parentPath->cost;
-        foundResturant += (n->restaurantType == lookingFor);
-        n = (n->parentPath->n1 != n ? n->parentPath->n1 : n->parentPath->n2);
+        if(n->heavyPath != nullptr && n->heavyPath->parentNode != n && false){
+            //range query
+            //check if parent doesnt belong to the heavy path
+            int start, end = n->idInHeavyPath;
+            if(target->heavyPath == n->heavyPath){
+                start = target->idInHeavyPath;
+                n = target;
+            }else{
+                start = 0;
+                n = n->heavyPath->parentNode;
+            }
+            foundResturant += n->heavyPath->restaurantOccurrences->rangeQuery(pair<int, int> (start, end), lookingFor);
+            long tmpCost = n->heavyPath->prefixSum1[end] - n->heavyPath->prefixSum1[start];
+            cost += tmpCost;
+        }else{
+            cost += n->parentPath->cost;
+            foundResturant += (n->restaurantType == lookingFor);
+            n = (n->parentPath->n1 != n ? n->parentPath->n1 : n->parentPath->n2);
+        }
     }
     foundResturant += (target->restaurantType == lookingFor);
     return pair<bool, long>(foundResturant, cost);
@@ -214,17 +237,11 @@ int main() {
     cin >> nodesCount >> typesCount;
 
     vector<Node *> nodes;
-
-    vector<Node *> centroidNodes;
-    vector<Edge *> centroidEdges;
-
-
     for(int i = 0; i < nodesCount; i ++){
         int type;
         cin >> type;
         type --;
         nodes.push_back(new Node(i, type));
-        centroidNodes.push_back(new Node(i, type));
     }
     for(int i = 0; i < nodesCount - 1; i ++){
         int n1ID, n2ID, cost;
@@ -234,15 +251,21 @@ int main() {
         Node * n2 = nodes[n2ID];
         Edge * e = new Edge(i, cost, n1, n2);
         n1->connections.push_back(e);
-        n2->connections.push_back(e);
+        n2->connections.push_back(e);//
     }
     vector<Node *> eulerTour;
 
     dfs(nodes[0], nullptr, eulerTour);
     SparseTable sp = SparseTable(eulerTour);
 
-    findCentroids(nodes[0], centroidNodes, centroidEdges, nullptr, nodes[0]->subTreeSize, 0);
+    //create segment trees on the tree
+    vector<HeavyPath *> heavyPaths;
+    
+    propagateHeavyPaths(nodes[0], heavyPaths);
 
+    for(auto h : heavyPaths){
+        h->preprocess();
+    }
 
     int queriesCount;
     cin >> queriesCount;
@@ -251,7 +274,7 @@ int main() {
         int n1ID, n2ID, restaurant;
         cin >> n1ID >> n2ID >> restaurant;
         n1ID --, n2ID --, restaurant --;
-        if(i == 101){
+        if(i == 102){
             cout<<"";
         }
 
@@ -260,9 +283,7 @@ int main() {
         Node * lca = sp.minRangeQuery(n1->lastEuler, n2->firstEuler);
         pair<bool, long> data1 = getPathData(n1, lca, restaurant);
         pair<bool, long> data2 = getPathData(n2, lca, restaurant);
-        bool found = data1.first + data2.first;
-        long sum = data1.second + data2.second;
-        cout << (found ? sum : -1) << "\n";
+        cout << ((data1.first + data2.first) ? (data1.second + data2.second) : -1) << "\n";
     }
 
 
