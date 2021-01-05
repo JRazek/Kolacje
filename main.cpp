@@ -20,19 +20,21 @@ struct Node{
 
     Edge * parentPath;
     vector<Edge *> connections;
-    const int restaurantType;
+    int restaurantType;
 
     int level;
     
     int subTreeSize;
 
+    bool isVisible = true;//wynika z hierarchii ale wtvr
 
     int firstEuler;
     int lastEuler;
 
-    
+    unordered_map<Node *, int> parentsPathCosts;//after centroid decomposition
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
+    Node(int id): id(id){};
 };
 
 pair<int,int> commonPart(const pair<int,int> &range1, const pair<int,int> &range2){
@@ -41,61 +43,6 @@ pair<int,int> commonPart(const pair<int,int> &range1, const pair<int,int> &range
     pair<int, int> range(min, max);
     return range;
 }
-
-struct SegmentTree{
-    struct BinaryNode{
-        const int id;
-        pair<int,int> range;
-        unordered_set<int> occurrences; 
-        BinaryNode(int id):id(id){}
-    };
-    vector<BinaryNode *> nodes;
-    SegmentTree(vector<int> elements){
-        int height = ceil(elements.size()) + 1;
-        for(int i = 0; i < pow(2, height) - 1; i ++){
-            nodes.push_back(new BinaryNode(i));
-        }
-        int firstFloorNode1 = pow(2, height - 1) - 1;
-        for(int i = 0; i < elements.size(); i ++){
-            nodes[firstFloorNode1 + i]->occurrences.insert(elements[i]);
-            nodes[firstFloorNode1 + i]->range = pair<int,int>(i, i);
-        }
-        for(int i = pow(2, height - 1) - 2; i >= 0; i --){
-            BinaryNode * node = nodes[i];
-            BinaryNode * left = getChild(node, true);
-            BinaryNode * right = getChild(node, false);
-            node->occurrences.insert(left->occurrences.begin(), left->occurrences.end());
-            node->occurrences.insert(right->occurrences.begin(), right->occurrences.end());
-            node->range = pair<int,int>(left->range.first, right->range.second);
-        }
-    }
-    BinaryNode * getChild(BinaryNode * parent, bool left){
-        return nodes[parent->id * 2 + 1 + !left];
-    }
-    BinaryNode * getParent(BinaryNode * child){
-        return nodes[(child->id - 1) / 2];
-    }
-    bool rangeQuery(pair<int,int> range, const int &lookingFor, int nodeID = 0){
-        BinaryNode * node = nodes[nodeID];
-        pair<int, int> common = commonPart(range, node->range);
-        if(common.first < common.second && node->occurrences.find(lookingFor) != node->occurrences.end()){
-            //overlap
-            bool result = false;
-            BinaryNode * left = getChild(node, true);
-            BinaryNode * right = getChild(node, false);
-            
-            result += rangeQuery(common, lookingFor, left->id);
-            if(result == true)
-                return true;
-            result += rangeQuery(common, lookingFor, right->id);
-            return result;
-            
-        }else if(common.first == node->range.first && common.second == node->range.second){
-            return (node->occurrences.find(lookingFor) != node->occurrences.end());
-        }
-        return false;        
-    }
-};
 
 
 struct SparseTable{
@@ -160,29 +107,42 @@ int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     return subTreeSize;
 }
 
-void findCentroids(Node * n, vector<Node *> &centroidNodes, vector<Edge *> &centroidEdges, Node * currParentCentroid, int treeSize, int costFromPrevCentroid){
-    int sum;
+void findCentroids(Node * n, Node * currentParent, vector<Node *> &centroidNodes, vector<Edge *> &centroidEdges, unordered_map<Node *, int> &parentsPathCosts){
+    bool all = true;
     for(auto e : n->connections){
-        if(e != n -> parentPath){
-            Node * another = (e->n1 != n ? e->n1 : e-> n2);
-            sum += another->subTreeSize;
+        if(e != n->parentPath){
+            Node * child = (n != e->n1 ? e->n1 : e->n2);
+            if(child->subTreeSize > (n->subTreeSize / 2)){
+                all = false;
+                int newSizeN = n->subTreeSize - child->subTreeSize;
+                child->subTreeSize = n->subTreeSize;
+                n->subTreeSize = newSizeN;
+                //hierarchy swap
+                n->parentPath = child->parentPath;
+                child->parentPath = nullptr;
+                findCentroids(child, currentParent, centroidNodes, centroidEdges, parentsPathCosts);
+                break;
+            }
         }
     }
-    if(sum >= (treeSize / 2)){
-        if(currParentCentroid != nullptr){
-            Edge * edge = new Edge (centroidEdges.size(), costFromPrevCentroid, currParentCentroid, n);
-            
-            centroidNodes[currParentCentroid->id]->connections.push_back(edge);
-            centroidNodes[n->id]->connections.push_back(edge);
-            centroidEdges.push_back(edge);
+    if(all){
+        //this is a centroid
+
+        for(auto e : n->connections){
+            if(e != n->parentPath){
+                Node * child = (n != e->n1 ? e->n1 : e->n2);
+                findCentroids(child, n, centroidNodes, centroidEdges, parentsPathCosts);
+            }
         }
-        //calculateSubTreeSizes(n);
-    }
-    for(auto e : n->connections){
-        if(e != n -> parentPath){
-            Node * another = (e->n1 != n ? e->n1 : e-> n2);
-            findCentroids(another, centroidNodes, centroidEdges, n, another->subTreeSize)
-        }
+        n->connections.clear();
+        if(currentParent != nullptr){
+            Edge * c = new Edge(centroidEdges.size(), parentsPathCosts[currentParent], currentParent, n);
+            currentParent->connections.push_back(c);
+            n->parentsPathCosts.insert(parentsPathCosts.begin(), parentsPathCosts.end());
+            n->connections.push_back(c);
+            n->parentPath = c;
+        }        
+
     }
 }
 
@@ -214,6 +174,7 @@ int main() {
     cin >> nodesCount >> typesCount;
 
     vector<Node *> nodes;
+    vector<Edge *> edges; //to delete after decomposition
 
     vector<Node *> centroidNodes;
     vector<Edge *> centroidEdges;
@@ -241,7 +202,9 @@ int main() {
     dfs(nodes[0], nullptr, eulerTour);
     SparseTable sp = SparseTable(eulerTour);
 
-    findCentroids(nodes[0], centroidNodes, centroidEdges, nullptr, nodes[0]->subTreeSize, 0);
+    unordered_map<Node *, int> parentsPathCosts;
+
+    findCentroids(nodes[0], nullptr, centroidNodes, centroidEdges, parentsPathCosts);
 
 
     int queriesCount;
