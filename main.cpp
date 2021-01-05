@@ -37,9 +37,17 @@ struct Node{
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
 };
 
+pair<int,int> commonPart(const pair<int,int> &range1, const pair<int,int> &range2){
+    int min = (range1.first > range2.first ? range1.first : range2.first);
+    int max = (range1.second < range2.second ? range1.second : range2.second);
+    pair<int, int> range(min, max);
+    return range;
+}
+
 struct SegmentTree{
     struct BinaryNode{
         const int id;
+        pair<int,int> range;
         unordered_set<int> occurrences; 
         BinaryNode(int id):id(id){}
     };
@@ -52,6 +60,7 @@ struct SegmentTree{
         int firstFloorNode1 = pow(2, height - 1) - 1;
         for(int i = 0; i < elements.size(); i ++){
             nodes[firstFloorNode1 + i]->occurrences.insert(elements[i]);
+            nodes[firstFloorNode1 + i]->range = pair<int,int>(i, i);
         }
         for(int i = pow(2, height - 1) - 2; i >= 0; i --){
             BinaryNode * node = nodes[i];
@@ -59,6 +68,7 @@ struct SegmentTree{
             BinaryNode * right = getChild(node, false);
             node->occurrences.insert(left->occurrences.begin(), left->occurrences.end());
             node->occurrences.insert(right->occurrences.begin(), right->occurrences.end());
+            node->range = pair<int,int>(left->range.first, right->range.second);
         }
     }
     BinaryNode * getChild(BinaryNode * parent, bool left){
@@ -66,6 +76,26 @@ struct SegmentTree{
     }
     BinaryNode * getParent(BinaryNode * child){
         return nodes[(child->id - 1) / 2];
+    }
+    bool rangeQuery(pair<int,int> range, const int &lookingFor, int nodeID = 0){
+        BinaryNode * node = nodes[nodeID];
+        pair<int, int> common = commonPart(range, node->range);
+        if(common.first < common.second && node->occurrences.find(lookingFor) != node->occurrences.end()){
+            //overlap
+            bool result = false;
+            BinaryNode * left = getChild(node, true);
+            BinaryNode * right = getChild(node, false);
+            
+            result += rangeQuery(common, lookingFor, left->id);
+            if(result == true)
+                return true;
+            result += rangeQuery(common, lookingFor, right->id);
+            return result;
+            
+        }else if(common.first == node->range.first && common.second == node->range.second){
+            return (node->occurrences.find(lookingFor) != node->occurrences.end());
+        }
+        return false;        
     }
 };
 
@@ -174,8 +204,9 @@ void propagateHeavyPaths(Node * node, vector<HeavyPath *> &heavyPaths){
     }
 }
 
-int countPathCost(Node * n, Node * target){
+pair<bool, int> getPathData(Node * n, Node * target, int lookingFor){
     int cost = 0;
+    bool foundResturant = false;
     while(n != target){
         if(n->heavyPath != nullptr && n->heavyPath->parentNode != n){
             //range query
@@ -188,14 +219,17 @@ int countPathCost(Node * n, Node * target){
                 start = 0;
                 n = n->heavyPath->parentNode;
             }
+            foundResturant += n->heavyPath->restaurantOccurrences->rangeQuery(pair<int, int> (start, end), lookingFor);
             int tmpCost = n->heavyPath->prefixSum1[end] - n->heavyPath->prefixSum1[start];
             cost += tmpCost;
         }else{
             cost += n->parentPath->cost;
+            foundResturant += (n->restaurantType == lookingFor);
             n = (n->parentPath->n1 != n ? n->parentPath->n1 : n->parentPath->n2);
         }
     }
-    return cost;
+    foundResturant += (n->restaurantType == lookingFor);
+    return pair<bool, int>(foundResturant, cost);
 }
 
 int main() {
@@ -244,9 +278,9 @@ int main() {
         Node * n1 = nodes[n1ID];
         Node * n2 = nodes[n2ID];
         Node * lca = sp.minRangeQuery(n1->lastEuler, n2->firstEuler);
-        int cost1 = countPathCost(n1, lca);
-        int cost2 = countPathCost(n2, lca);
-        cout << cost1 + cost2 << "\n";
+        pair<bool, int> data1 = getPathData(n1, lca, restaurant);
+        pair<bool, int> data2 = getPathData(n2, lca, restaurant);
+        cout << ((data1.first + data2.first) ? data1.second + data2.second : -1) << "\n";
     }
 
 
