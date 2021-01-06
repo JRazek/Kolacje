@@ -7,11 +7,12 @@ struct HeavyPath;
 
 struct Edge{
     const int id;
-    const int cost;
+    int cost;
 
     Node * n1;
     Node * n2;
 
+    Edge(int id, Node * n1, Node * n2):id(id), n1(n1), n2(n2){};
     Edge(int id, int cost, Node * n1, Node * n2):id(id), cost(cost), n1(n1), n2(n2){};
 };
 
@@ -20,6 +21,10 @@ struct Node{
 
     Edge * parentPath;
     vector<Edge *> connections;
+
+    Edge * centroidParentPath;
+    vector<Edge *> centroidConnections;
+
     int restaurantType;
 
     int level;
@@ -78,6 +83,8 @@ struct SparseTable{
     }
 };
 
+
+//simple subtrees calculation and inheritance
 int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     if(comingFrom != nullptr){
         n->parentPath = comingFrom;
@@ -107,43 +114,46 @@ int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     return subTreeSize;
 }
 
-void findCentroids(Node * n, Node * currentParent, vector<Node *> &centroidNodes, vector<Edge *> &centroidEdges, unordered_map<Node *, int> &parentsPathCosts){
-    bool all = true;
+
+Node * findCentroid(Node * n){
+    //first must be from the root of the tree. Otherwise it will not work.
+
     for(auto e : n->connections){
-        if(e != n->parentPath){
-            Node * child = (n != e->n1 ? e->n1 : e->n2);
-            if(child->subTreeSize > (n->subTreeSize / 2)){
-                all = false;
-                int newSizeN = n->subTreeSize - child->subTreeSize;
-                child->subTreeSize = n->subTreeSize;
-                n->subTreeSize = newSizeN;
-                //hierarchy swap
-                n->parentPath = child->parentPath;
-                child->parentPath = nullptr;
-                findCentroids(child, currentParent, centroidNodes, centroidEdges, parentsPathCosts);
-                break;
+        if(e != n-> parentPath){
+            Node * another = (e->n1 != n ? e->n1 : e->n2);
+            if(another->isVisible && another->subTreeSize > (n->subTreeSize / 2)){
+                int newNSubTreeSize = n->subTreeSize - another->subTreeSize;
+                another->subTreeSize = n->subTreeSize;
+                n->subTreeSize = newNSubTreeSize;
+                n->parentPath = another->parentPath;
+                another->parentPath = nullptr;
+                return findCentroid(another);
             }
         }
     }
-    if(all){
-        //this is a centroid
+    return n;
+}
 
-        for(auto e : n->connections){
-            if(e != n->parentPath){
-                Node * child = (n != e->n1 ? e->n1 : e->n2);
-                findCentroids(child, n, centroidNodes, centroidEdges, parentsPathCosts);
+Node * decomposeGraph(Node * root, int &edgeNum){
+
+    root = findCentroid(root);
+    root->isVisible = false;
+
+    vector<Node *> children;
+    for(auto e : root->connections){
+        if(e != root -> parentPath){
+
+            Node * another = (e->n1 != root ? e->n1 : e->n2);//not necessary the root of the other centroid
+            if(another->isVisible){
+                another = decomposeGraph(another, ++edgeNum);
+                Edge * edge = new Edge(edgeNum, root, another); 
+                root->centroidConnections.push_back(edge);
+                another->centroidConnections.push_back(edge);
+                another->centroidParentPath = edge;
             }
         }
-        n->connections.clear();
-        if(currentParent != nullptr){
-            Edge * c = new Edge(centroidEdges.size(), parentsPathCosts[currentParent], currentParent, n);
-            currentParent->connections.push_back(c);
-            n->parentsPathCosts.insert(parentsPathCosts.begin(), parentsPathCosts.end());
-            n->connections.push_back(c);
-            n->parentPath = c;
-        }        
-
     }
+    return root;
 }
 
 int calculateSubTreeSizes(Node * n){
@@ -176,16 +186,12 @@ int main() {
     vector<Node *> nodes;
     vector<Edge *> edges; //to delete after decomposition
 
-    vector<Node *> centroidNodes;
-    vector<Edge *> centroidEdges;
-
 
     for(int i = 0; i < nodesCount; i ++){
         int type;
         cin >> type;
         type --;
         nodes.push_back(new Node(i, type));
-        centroidNodes.push_back(new Node(i, type));
     }
     for(int i = 0; i < nodesCount - 1; i ++){
         int n1ID, n2ID, cost;
@@ -204,7 +210,9 @@ int main() {
 
     unordered_map<Node *, int> parentsPathCosts;
 
-    findCentroids(nodes[0], nullptr, centroidNodes, centroidEdges, parentsPathCosts);
+    int id = 0;
+    Node * centroidRoot = decomposeGraph(nodes[0], id);
+
 
 
     int queriesCount;
