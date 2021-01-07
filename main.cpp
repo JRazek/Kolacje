@@ -7,19 +7,21 @@ struct HeavyPath;
 
 struct Edge{
     const int id;
-    int cost;
+    long cost;
 
     Node * n1;
     Node * n2;
 
     Edge(int id, Node * n1, Node * n2):id(id), n1(n1), n2(n2){};
-    Edge(int id, int cost, Node * n1, Node * n2):id(id), cost(cost), n1(n1), n2(n2){};
+    Edge(int id, long cost, Node * n1, Node * n2):id(id), cost(cost), n1(n1), n2(n2){};
 };
 
 struct Node{
     const int id;
 
     Edge * parentPath;
+
+
     vector<Edge *> connections;
 
     Edge * centroidParentPath;
@@ -28,26 +30,23 @@ struct Node{
     int restaurantType;
 
     int level;
-    
+
     int subTreeSize;
 
     bool isVisible = true;//wynika z hierarchii ale wtvr
+    map<int, bool> visited;//dfdDfs with root of id <int>
+
 
     int firstEuler;
     int lastEuler;
 
-    unordered_map<Node *, int> parentsPathCosts;//after centroid decomposition
+    map<Node *, long> parentsPathCosts;//after centroid decomposition
+
+    map<int, pair<Node *, long>> subtreeDistances;//closest distance to the n type of restaurant with cost of
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
     Node(int id): id(id){};
 };
-
-pair<int,int> commonPart(const pair<int,int> &range1, const pair<int,int> &range2){
-    int min = (range1.first > range2.first ? range1.first : range2.first);
-    int max = (range1.second < range2.second ? range1.second : range2.second);
-    pair<int, int> range(min, max);
-    return range;
-}
 
 
 struct SparseTable{
@@ -71,7 +70,7 @@ struct SparseTable{
         }
     }
 
-    Node * minRangeQuery(int min, int max){
+    Node * minRangeQuery(int min, int max) const{
         if(min > max){
             int tmp = max;
             max = min;
@@ -83,12 +82,30 @@ struct SparseTable{
     }
 };
 
+bool isParent(const Node * parent, const Node * child, const SparseTable &sp){
+    Node * lca = sp.minRangeQuery(parent->lastEuler, child->firstEuler);
+    return (lca == parent);
+}
 
 //simple subtrees calculation and inheritance
-int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
+int dfs0(Node * n, Edge * comingFrom){
     if(comingFrom != nullptr){
         n->parentPath = comingFrom;
     }
+
+    int subTreeSize = 1;
+
+    for(auto e : n->connections){
+        if(comingFrom != e){
+            Node * another = (e->n1 != n ? e->n1 : e->n2);
+            subTreeSize += dfs0(another, e);
+        }
+    }
+    n->subTreeSize = subTreeSize;
+    return subTreeSize;
+}
+
+int dfs1(Node * n, vector<Node *> &eulerTour, int level = 0){
     n->level = level;
 
     n->firstEuler = eulerTour.size();
@@ -98,10 +115,10 @@ int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
 
     int subTreeSize = 1;
 
-    for(auto e : n->connections){
-        if(comingFrom != e){
+    for(auto e : n->centroidConnections){
+        if(e != n->centroidParentPath){
             Node * another = (e->n1 != n ? e->n1 : e->n2);
-            subTreeSize += dfs(another, e, eulerTour, level+1);
+            subTreeSize += dfs1(another, eulerTour, level+1);
             n->lastEuler = eulerTour.size();
             eulerTour.push_back(n);
         }
@@ -114,6 +131,61 @@ int dfs(Node * n, Edge * comingFrom, vector<Node *> &eulerTour, int level = 0){
     return subTreeSize;
 }
 
+void dfs3(Node * n, Node * root, pair<Node * const, long> &parentsCost, const SparseTable &sp){
+    n->parentsPathCosts[parentsCost.first] = parentsCost.second;
+    n->visited[root->id] = true;
+    if(n->id == 0){
+        cout<<"";
+    }
+    for(auto e : n->connections){
+        Node * another = (e->n1 != n ? e->n1 : e->n2);
+        if(isParent(root, another, sp) && !another->visited[root->id]){
+            parentsCost.second += e->cost;
+            dfs3(another, root, parentsCost, sp);
+            parentsCost.second -= e->cost;
+        }
+    }
+    cout<<"";
+}
+
+void dfsDfs(Node * centroidRoot, const SparseTable &sp){
+    pair<Node * const , long> cost(centroidRoot, 0);
+    if(centroidRoot->id == 0)
+        cout<<"";
+    dfs3(centroidRoot, centroidRoot, cost, sp);
+    for(auto e : centroidRoot->centroidConnections){
+        if(e != centroidRoot->centroidParentPath){
+            Node * another = (e->n1 != centroidRoot ? e->n1 : e->n2);
+            dfsDfs(another, sp);
+        }
+    }
+}
+
+void dfsDfs2(Node * centroidRoot, Node * n){
+    for(auto e : n->centroidConnections){
+        if(e != n->centroidParentPath){
+            Node * another = (e->n1 != n ? e->n1 : e->n2);
+            dfsDfs2(centroidRoot, another);
+        }
+    }
+    if((centroidRoot->subtreeDistances.find(n->restaurantType) != centroidRoot->subtreeDistances.end() &&
+        centroidRoot->subtreeDistances[n->restaurantType].second > n->parentsPathCosts[centroidRoot]) ||
+        centroidRoot->subtreeDistances.find(n->restaurantType) == centroidRoot->subtreeDistances.end()) {
+            centroidRoot->subtreeDistances[n->restaurantType] = pair<Node *, long>(n, n->parentsPathCosts[centroidRoot]);
+    }
+}
+
+void dfs4(Node * centroidRoot){
+   // map<int, int> distanceTable;
+    dfsDfs2(centroidRoot, centroidRoot);
+    //centroidRoot->subtreeDistances.insert(distanceTable.begin(), distanceTable.end());
+    for(auto e : centroidRoot->centroidConnections){
+        if(e != centroidRoot->centroidParentPath){
+            Node * another = (e->n1 != centroidRoot ? e->n1 : e->n2);
+            dfs4(another);
+        }
+    }
+}
 
 Node * findCentroid(Node * n){
     //first must be from the root of the tree. Otherwise it will not work.
@@ -135,48 +207,61 @@ Node * findCentroid(Node * n){
 }
 
 Node * decomposeGraph(Node * root, int &edgeNum){
-
     root = findCentroid(root);
     root->isVisible = false;
 
     vector<Node *> children;
     for(auto e : root->connections){
-        if(e != root -> parentPath){
-
-            Node * another = (e->n1 != root ? e->n1 : e->n2);//not necessary the root of the other centroid
-            if(another->isVisible){
-                another = decomposeGraph(another, ++edgeNum);
-                Edge * edge = new Edge(edgeNum, root, another); 
-                root->centroidConnections.push_back(edge);
-                another->centroidConnections.push_back(edge);
-                another->centroidParentPath = edge;
-            }
+        Node * another = (e->n1 != root ? e->n1 : e->n2);//not necessary the root of the other centroid
+        if(another->isVisible){
+            another = decomposeGraph(another, ++edgeNum);
+            Edge * edge = new Edge(edgeNum, root, another);
+            root->centroidConnections.push_back(edge);
+            another->centroidConnections.push_back(edge);
+            another->centroidParentPath = edge;
         }
     }
     return root;
 }
 
-int calculateSubTreeSizes(Node * n){
-    int sum = 0;
-    for(auto e : n->connections){
-        if(e != n->parentPath){
-            sum += calculateSubTreeSizes((e->n1 != n ? e->n1 : e->n2));
-        }
-    }
-    sum += 1;
-    n->subTreeSize = sum;
-    return sum;
+long getPath(Node * n1, Node * n2, SparseTable &sp){
+    Node * lca = sp.minRangeQuery(n1->firstEuler, n2->lastEuler);
+    return n1->parentsPathCosts[lca] + n2->parentsPathCosts[lca];
 }
-pair<bool, long> getPathData(Node * n, Node * target, int lookingFor){
-    long cost = 0;
-    bool foundResturant = false;
-    while(n != target){
-        cost += n->parentPath->cost;
-        foundResturant += (n->restaurantType == lookingFor);
-        n = (n->parentPath->n1 != n ? n->parentPath->n1 : n->parentPath->n2);
+
+pair <Node *, long> findClosestPathToRestaurant(Node * n, int type){
+    Node * p = n;
+
+    long shortest = 1e15;
+    Node * shortestNode = nullptr;
+    while(true){
+        if(p->subtreeDistances.find(type) != p->subtreeDistances.end()){
+            if(p->subtreeDistances[type].second + n->parentsPathCosts[p] < shortest) {
+                shortest = p->subtreeDistances[type].second + n->parentsPathCosts[p];
+                shortestNode = p->subtreeDistances[type].first;
+            }
+        }
+        if(p->centroidParentPath == nullptr) {
+            break;
+            //cout<<"ERROR";
+            //return pair<Node *, long>(nullptr, 0);
+        }
+        p = (p->centroidParentPath->n1 != p ? p->centroidParentPath->n1 : p->centroidParentPath->n2);
     }
-    foundResturant += (target->restaurantType == lookingFor);
-    return pair<bool, long>(foundResturant, cost);
+    return pair<Node *, long>(shortestNode, shortest);
+}
+
+long manageQuery(Node * n1, Node * n2, int type, SparseTable &sp){
+    pair<Node *, long> n1p1 = findClosestPathToRestaurant(n1, type);
+    pair<Node *, long> n2p1 = findClosestPathToRestaurant(n2, type);
+
+    long n2p2 = getPath(n1p1.first, n2, sp);
+    long n1p2 = getPath(n2p1.first, n1, sp);
+
+    return ((n1p1.second + n2p2 < n2p1.second + n1p2) ? n1p1.second + n2p2 : n2p1.second + n1p2);
+
+    //int c1 = findClosestPathToRestaurant(n1, type);
+    //int c2 = findClosestPathToRestaurant(n2, type);
 }
 
 int main() {
@@ -185,12 +270,13 @@ int main() {
 
     vector<Node *> nodes;
     vector<Edge *> edges; //to delete after decomposition
-
+    bool restaurantAvailable[1000001] = {false};
 
     for(int i = 0; i < nodesCount; i ++){
         int type;
         cin >> type;
         type --;
+        restaurantAvailable[type] = true;
         nodes.push_back(new Node(i, type));
     }
     for(int i = 0; i < nodesCount - 1; i ++){
@@ -203,17 +289,22 @@ int main() {
         n1->connections.push_back(e);
         n2->connections.push_back(e);
     }
-    vector<Node *> eulerTour;
 
-    dfs(nodes[0], nullptr, eulerTour);
-    SparseTable sp = SparseTable(eulerTour);
 
-    unordered_map<Node *, int> parentsPathCosts;
+    dfs0(nodes[0], nullptr);
+
 
     int id = 0;
     Node * centroidRoot = decomposeGraph(nodes[0], id);
 
+    vector<Node *> eulerTour;
+    dfs1(centroidRoot, eulerTour, 0);
 
+    SparseTable sp = SparseTable(eulerTour);
+
+    dfsDfs(centroidRoot, sp);
+
+    dfs4(centroidRoot);
 
     int queriesCount;
     cin >> queriesCount;
@@ -222,18 +313,16 @@ int main() {
         int n1ID, n2ID, restaurant;
         cin >> n1ID >> n2ID >> restaurant;
         n1ID --, n2ID --, restaurant --;
-        if(i == 101){
-            cout<<"";
-        }
 
-        Node * n1 = nodes[n1ID];
-        Node * n2 = nodes[n2ID];
-        Node * lca = sp.minRangeQuery(n1->lastEuler, n2->firstEuler);
-        pair<bool, long> data1 = getPathData(n1, lca, restaurant);
-        pair<bool, long> data2 = getPathData(n2, lca, restaurant);
-        bool found = data1.first + data2.first;
-        long sum = data1.second + data2.second;
-        cout << (found ? sum : -1) << "\n";
+        if(restaurantAvailable[restaurant]){
+            Node * n1 = nodes[n1ID];
+            Node * n2 = nodes[n2ID];
+            long result = manageQuery(n1, n2, restaurant, sp);
+            cout<<result<<"\n";
+        }else{
+            cout<<-1<<"\n";
+        }
+        //cout << (found ? sum : -1) << "\n";
     }
 
 
