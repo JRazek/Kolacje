@@ -42,7 +42,7 @@ struct Node{
 
     map<Node *, long> parentsPathCosts;//after centroid decomposition
 
-    map<int, pair<Node *, long>> subtreeDistances;//closest distance to the n type of restaurant with cost of
+    map<int, pair<vector<Node *>, long>> subtreeDistances;//closest distance to the n type of restaurant with cost of
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
     Node(int id): id(id){};
@@ -169,9 +169,13 @@ void dfsDfs2(Node * centroidRoot, Node * n){
         }
     }
     if((centroidRoot->subtreeDistances.find(n->restaurantType) != centroidRoot->subtreeDistances.end() &&
-        centroidRoot->subtreeDistances[n->restaurantType].second > n->parentsPathCosts[centroidRoot]) ||
-        centroidRoot->subtreeDistances.find(n->restaurantType) == centroidRoot->subtreeDistances.end()) {
-            centroidRoot->subtreeDistances[n->restaurantType] = pair<Node *, long>(n, n->parentsPathCosts[centroidRoot]);
+        centroidRoot->subtreeDistances[n->restaurantType].second > n->parentsPathCosts[centroidRoot])
+        || centroidRoot->subtreeDistances.find(n->restaurantType) == centroidRoot->subtreeDistances.end()) {
+            centroidRoot->subtreeDistances[n->restaurantType] = pair<vector<Node *>, long>({n}, n->parentsPathCosts[centroidRoot]);
+    }
+    else if(centroidRoot->subtreeDistances.find(n->restaurantType) != centroidRoot->subtreeDistances.end() &&
+            centroidRoot->subtreeDistances[n->restaurantType].second == n->parentsPathCosts[centroidRoot]){
+        centroidRoot->subtreeDistances[n->restaurantType].first.push_back(n);
     }
 }
 
@@ -236,15 +240,16 @@ pair <Node *, long> findClosestPathToRestaurant(Node * n, int type){
     Node * shortestNode = nullptr;
     while(true){
         if(p->subtreeDistances.find(type) != p->subtreeDistances.end()){
-            if(p->subtreeDistances[type].second + n->parentsPathCosts[p] < shortest) {
-                shortest = p->subtreeDistances[type].second + n->parentsPathCosts[p];
-                shortestNode = p->subtreeDistances[type].first;
+            for(auto f : p->subtreeDistances[type].first) {
+                if (f->subtreeDistances[type].second + n->parentsPathCosts[p] < shortest) {
+
+                    shortest = f->subtreeDistances[type].second + n->parentsPathCosts[f];
+                    shortestNode = f;
+                }
             }
         }
         if(p->centroidParentPath == nullptr) {
             break;
-            //cout<<"ERROR";
-            //return pair<Node *, long>(nullptr, 0);
         }
         p = (p->centroidParentPath->n1 != p ? p->centroidParentPath->n1 : p->centroidParentPath->n2);
     }
@@ -313,11 +318,16 @@ int main() {
         int n1ID, n2ID, restaurant;
         cin >> n1ID >> n2ID >> restaurant;
         n1ID --, n2ID --, restaurant --;
-
+        if(i == 37){
+            cout<<"";
+        }
         if(restaurantAvailable[restaurant]){
             Node * n1 = nodes[n1ID];
             Node * n2 = nodes[n2ID];
             long result = manageQuery(n1, n2, restaurant, sp);
+            if(result == 132054){
+                cout<<"";
+            }
             cout<<result<<"\n";
         }else{
             cout<<-1<<"\n";

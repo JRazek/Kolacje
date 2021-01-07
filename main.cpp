@@ -42,7 +42,7 @@ struct Node{
 
     map<Node *, long> parentsPathCosts;//after centroid decomposition
 
-    map<int, pair<Node *, long>> subtreeDistances;//closest distance to the n type of restaurant with cost of
+    map<int, pair<vector<Node *>, long>> subtreeDistances;//closest distance to the n type of restaurant with cost of
 
     Node(int id, int restaurantType): id(id), restaurantType(restaurantType){};
     Node(int id): id(id){};
@@ -171,7 +171,7 @@ void dfsDfs2(Node * centroidRoot, Node * n){
     if((centroidRoot->subtreeDistances.find(n->restaurantType) != centroidRoot->subtreeDistances.end() &&
         centroidRoot->subtreeDistances[n->restaurantType].second > n->parentsPathCosts[centroidRoot]) ||
         centroidRoot->subtreeDistances.find(n->restaurantType) == centroidRoot->subtreeDistances.end()) {
-            centroidRoot->subtreeDistances[n->restaurantType] = pair<Node *, long>(n, n->parentsPathCosts[centroidRoot]);
+            centroidRoot->subtreeDistances[n->restaurantType] = pair<vector<Node *>, long>({n}, n->parentsPathCosts[centroidRoot]);
     }
 }
 
@@ -229,7 +229,7 @@ long getPath(Node * n1, Node * n2, SparseTable &sp){
     return n1->parentsPathCosts[lca] + n2->parentsPathCosts[lca];
 }
 
-pair <Node *, long> findClosestPathToRestaurant(Node * n, int type){
+pair <vector<Node *>, long> findClosestPathToRestaurant(Node * n, int type){
     Node * p = n;
 
     long shortest = 1e15;
@@ -238,22 +238,20 @@ pair <Node *, long> findClosestPathToRestaurant(Node * n, int type){
         if(p->subtreeDistances.find(type) != p->subtreeDistances.end()){
             if(p->subtreeDistances[type].second + n->parentsPathCosts[p] < shortest) {
                 shortest = p->subtreeDistances[type].second + n->parentsPathCosts[p];
-                shortestNode = p->subtreeDistances[type].first;
+                shortestNode = p;
             }
         }
         if(p->centroidParentPath == nullptr) {
             break;
-            //cout<<"ERROR";
-            //return pair<Node *, long>(nullptr, 0);
         }
         p = (p->centroidParentPath->n1 != p ? p->centroidParentPath->n1 : p->centroidParentPath->n2);
     }
-    return pair<Node *, long>(shortestNode, shortest);
+    return pair<vector<Node *>, long>(shortestNode->subtreeDistances[type].first, shortest);
 }
 
 long manageQuery(Node * n1, Node * n2, int type, SparseTable &sp){
-    pair<Node *, long> n1p1 = findClosestPathToRestaurant(n1, type);
-    pair<Node *, long> n2p1 = findClosestPathToRestaurant(n2, type);
+    pair<vector<Node *>, long> n1p1 = findClosestPathToRestaurant(n1, type);//candidates1
+    pair<vector<Node *>, long> n2p1 = findClosestPathToRestaurant(n2, type);//candidates2
 
     long n2p2 = getPath(n1p1.first, n2, sp);
     long n1p2 = getPath(n2p1.first, n1, sp);
@@ -313,7 +311,9 @@ int main() {
         int n1ID, n2ID, restaurant;
         cin >> n1ID >> n2ID >> restaurant;
         n1ID --, n2ID --, restaurant --;
-
+        if(i == 36){
+            cout<<"";
+        }
         if(restaurantAvailable[restaurant]){
             Node * n1 = nodes[n1ID];
             Node * n2 = nodes[n2ID];
